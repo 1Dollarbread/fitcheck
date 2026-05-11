@@ -1,65 +1,144 @@
-import Image from "next/image";
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+
+type UploadedFit = {
+  url: string;
+  pathname: string;
+};
 
 export default function Home() {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [uploadedFits, setUploadedFits] = useState<UploadedFit[]>([]);
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setPreviewUrl("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedFile]);
+
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedFile) {
+      setErrorMessage("Choose or take a photo before uploading.");
+      return;
+    }
+
+    setErrorMessage("");
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? "Upload failed.");
+      }
+
+      const payload = (await response.json()) as UploadedFit;
+      setUploadedFits((current) => [payload, ...current]);
+      setSelectedFile(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Upload failed unexpectedly.";
+      setErrorMessage(message);
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-6 py-10">
+      <h1 className="text-3xl font-bold tracking-tight">FitCheck</h1>
+      <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
+        Upload or snap a photo of your outfit. We will save it now, then add AI
+        ranking and budget-friendly suggestions in the next step.
+      </p>
+
+      <form
+        onSubmit={handleUpload}
+        className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <label className="mb-2 block text-sm font-medium">Your fit photo</label>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(event) => {
+            const file = event.target.files?.[0] ?? null;
+            setSelectedFile(file);
+            setErrorMessage("");
+          }}
+          className="block w-full cursor-pointer rounded-lg border border-zinc-300 bg-zinc-50 p-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {previewUrl && (
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-medium">Preview</p>
+            <img
+              src={previewUrl}
+              alt="Preview of selected outfit"
+              className="max-h-96 w-auto rounded-xl border border-zinc-200 object-contain dark:border-zinc-700"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          </div>
+        )}
+
+        {errorMessage && (
+          <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+            {errorMessage}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={isUploading}
+          className="mt-6 rounded-full bg-black px-5 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
+        >
+          {isUploading ? "Uploading..." : "Save fit photo"}
+        </button>
+      </form>
+
+      <section className="mt-10">
+        <h2 className="text-xl font-semibold">Saved photos</h2>
+        {uploadedFits.length === 0 ? (
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            No photos uploaded yet.
+          </p>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {uploadedFits.map((fit) => (
+              <article
+                key={fit.pathname}
+                className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800"
+              >
+                <img
+                  src={fit.url}
+                  alt="Uploaded fit photo"
+                  className="h-64 w-full object-cover"
+                />
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
