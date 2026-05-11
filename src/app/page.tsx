@@ -50,7 +50,7 @@ export default function Home() {
 
       if (!response.ok) {
         const payload = (await response.json()) as { error?: string };
-        throw new Error(payload.error ?? "Upload failed.");
+        throw new Error(payload.error ?? "upload failed.");
       }
 
       const payload = (await response.json()) as UploadedFit;
@@ -69,8 +69,8 @@ export default function Home() {
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-6 py-10">
       <h1 className="text-3xl font-bold tracking-tight">FitCheck</h1>
       <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-        Upload or snap a photo of your outfit. We will save it now, then add AI
-        ranking and budget-friendly suggestions in the next step.
+        Upload or snap a photo of your amazing outfit. We will save it now, then add AI
+        ranking and budget-friendly suggestifffffons in the next step.
       </p>
 
       <form
