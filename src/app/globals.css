@@ -24,3 +24,68 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Camera capture reveal */
+@keyframes fit-flash-screen {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.92;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.fit-flash-screen {
+  animation: fit-flash-screen 1.35s ease-in-out forwards;
+}
+
+@keyframes fit-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fit-fade-up {
+  opacity: 0;
+  animation: fit-fade-up 0.65s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.fit-fade-up-delay-1 {
+  animation-delay: 0.1s;
+}
+
+.fit-fade-up-delay-2 {
+  animation-delay: 0.2s;
+}
+
+.fit-fade-up-delay-3 {
+  animation-delay: 0.28s;
+}
+
+.fit-fade-up-delay-4 {
+  animation-delay: 0.36s;
+}
+
+@keyframes fit-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.fit-scale-in {
+  opacity: 0;
+  animation: fit-scale-in 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.42s forwards;
+}
