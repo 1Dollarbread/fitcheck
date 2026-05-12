@@ -1,6 +1,8 @@
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
+import { FITCHECK_BLOB_PREFIX } from "@/lib/fitcheck-blob";
+
 const IMAGE_EXTENSIONS = new Set([
   "jpg",
   "jpeg",
@@ -99,7 +101,7 @@ export async function POST(request: Request) {
     }
 
     const uploadExt = safeUploadExtension(ext);
-    const storageName = `fit-${Date.now()}.${uploadExt}`;
+    const storageName = `${FITCHECK_BLOB_PREFIX}fit-${Date.now()}.${uploadExt}`;
     const contentType = contentTypeForUpload(mime, ext);
 
     const blob = await put(storageName, raw, {
