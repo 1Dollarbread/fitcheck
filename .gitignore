@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+.fitcheck-data
 
 # debug
 npm-debug.log*

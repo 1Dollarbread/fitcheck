@@ -22,6 +22,17 @@ type TabId = "save" | "album";
 
 type CameraRevealPhase = "flash" | "analyzing" | "content";
 
+type AuthUser = {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl?: string;
+  usernameUpdatedAt?: string;
+  passwordUpdatedAt?: string;
+};
+
+type AuthMode = "login" | "signup" | "verify-signup" | "forgot" | "reset";
+
 function ruleLabel(ruleId: string): string {
   return FIT_SCORING_RULES.find((r) => r.id === ruleId)?.label ?? ruleId;
 }
@@ -37,8 +48,496 @@ async function readErrorMessage(response: Response): Promise<string> {
   }
 }
 
+async function postJson<T>(
+  url: string,
+  body?: Record<string, unknown>,
+  method = "POST",
+): Promise<T> {
+  const response = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = (await response.json()) as T & { error?: string };
+  if (!response.ok) throw new Error(data.error ?? "Request failed.");
+  return data;
+}
+
+function cooldownText(value?: string) {
+  if (!value) return "Available now";
+  const next = new Date(new Date(value).getTime() + 60 * 24 * 60 * 60 * 1000);
+  const days = Math.ceil((next.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  return days > 0 ? `Locked for ${days} more day${days === 1 ? "" : "s"}` : "Available now";
+}
+
+function AuthScreen({ onAuthed }: { onAuthed: (user: AuthUser) => void }) {
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      if (mode === "login") {
+        const data = await postJson<{ user: AuthUser }>("/api/auth/login", {
+          login: email,
+          password,
+        });
+        onAuthed(data.user);
+      } else if (mode === "signup") {
+        if (password !== confirmPassword) throw new Error("Passwords do not match.");
+        const data = await postJson<{ devCode?: string }>("/api/auth/register", {
+          email,
+          username,
+          password,
+        });
+        setMode("verify-signup");
+        setMessage(
+          data.devCode
+            ? `Verification code: ${data.devCode}`
+            : "Check your email for the 6-digit code.",
+        );
+      } else if (mode === "verify-signup") {
+        const data = await postJson<{ user: AuthUser }>(
+          "/api/auth/verify-registration",
+          { email, code },
+        );
+        onAuthed(data.user);
+      } else if (mode === "forgot") {
+        const data = await postJson<{ devCode?: string }>(
+          "/api/auth/forgot-password",
+          { email },
+        );
+        setMode("reset");
+        setMessage(
+          data.devCode
+            ? `Password reset code: ${data.devCode}`
+            : "Check your email for the reset code.",
+        );
+      } else if (mode === "reset") {
+        if (password !== confirmPassword) throw new Error("Passwords do not match.");
+        await postJson("/api/auth/reset-password", { email, code, password });
+        setMode("login");
+        setPassword("");
+        setConfirmPassword("");
+        setCode("");
+        setMessage("Password updated. Sign in with the new password.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function googleSignIn() {
+    setBusy(true);
+    setError("");
+    try {
+      await postJson("/api/auth/google");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in is not configured.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const title =
+    mode === "signup"
+      ? "Create account"
+      : mode === "verify-signup"
+        ? "Verify email"
+        : mode === "forgot" || mode === "reset"
+          ? "Reset password"
+          : "Welcome back";
+
+  return (
+    <main className="mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col justify-center bg-[radial-gradient(circle_at_top_left,#f3e8ff_0,#fff_36%,#fff_100%)] px-5 py-8 text-[#20172f] shadow-2xl shadow-purple-950/10 sm:my-6 sm:min-h-[880px] sm:rounded-[2rem]">
+      <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-purple-500">
+        FitCheck account
+      </p>
+      <h1 className="mt-2 text-4xl font-black tracking-tight text-[#27123d]">
+        {title}
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-[#6f5d82]">
+        Sign in to keep your album private and tied to your profile.
+      </p>
+
+      <form onSubmit={submit} className="mt-8 space-y-4">
+        {(mode === "signup") && (
+          <label className="block text-sm font-bold text-[#352044]">
+            Username
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              className="mt-2 w-full rounded-2xl border border-purple-100 bg-white px-4 py-3 outline-none ring-purple-300 focus:ring-2"
+              required
+            />
+          </label>
+        )}
+
+        <label className="block text-sm font-bold text-[#352044]">
+          {mode === "login" ? "Email or username" : "Email"}
+          <input
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            type={mode === "login" ? "text" : "email"}
+            className="mt-2 w-full rounded-2xl border border-purple-100 bg-white px-4 py-3 outline-none ring-purple-300 focus:ring-2"
+            required
+          />
+        </label>
+
+        {(mode === "login" || mode === "signup" || mode === "reset") && (
+          <label className="block text-sm font-bold text-[#352044]">
+            {mode === "reset" ? "New password" : "Password"}
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              className="mt-2 w-full rounded-2xl border border-purple-100 bg-white px-4 py-3 outline-none ring-purple-300 focus:ring-2"
+              required
+            />
+          </label>
+        )}
+
+        {(mode === "signup" || mode === "reset") && (
+          <label className="block text-sm font-bold text-[#352044]">
+            Confirm password
+            <input
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              type="password"
+              className="mt-2 w-full rounded-2xl border border-purple-100 bg-white px-4 py-3 outline-none ring-purple-300 focus:ring-2"
+              required
+            />
+          </label>
+        )}
+
+        {(mode === "verify-signup" || mode === "reset") && (
+          <label className="block text-sm font-bold text-[#352044]">
+            6-digit code
+            <input
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              inputMode="numeric"
+              maxLength={6}
+              className="mt-2 w-full rounded-2xl border border-purple-100 bg-white px-4 py-3 outline-none ring-purple-300 focus:ring-2"
+              required
+            />
+          </label>
+        )}
+
+        {message && <p className="text-sm font-bold text-emerald-700">{message}</p>}
+        {error && <p className="text-sm font-bold text-red-600">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full rounded-2xl bg-[#251236] px-5 py-4 text-base font-black text-white shadow-xl shadow-purple-950/20 transition active:scale-[0.98] disabled:opacity-50"
+        >
+          {busy
+            ? "Working..."
+            : mode === "signup"
+              ? "Send verification code"
+              : mode === "verify-signup"
+                ? "Create account"
+                : mode === "forgot"
+                  ? "Send reset code"
+                  : mode === "reset"
+                    ? "Update password"
+                    : "Log in"}
+        </button>
+      </form>
+
+      <button
+        type="button"
+        onClick={googleSignIn}
+        className="mt-3 w-full rounded-2xl border border-purple-200 bg-white px-5 py-4 text-sm font-black text-purple-800 shadow-sm"
+      >
+        Continue with Google
+      </button>
+
+      <div className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm font-bold text-purple-700">
+        {mode !== "login" && (
+          <button type="button" onClick={() => setMode("login")}>
+            Log in
+          </button>
+        )}
+        {mode !== "signup" && (
+          <button type="button" onClick={() => setMode("signup")}>
+            Sign up
+          </button>
+        )}
+        {mode !== "forgot" && mode !== "reset" && (
+          <button type="button" onClick={() => setMode("forgot")}>
+            Forgot password?
+          </button>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function ProfileModal({
+  user,
+  onClose,
+  onUserChange,
+  onLogout,
+}: {
+  user: AuthUser;
+  onClose: () => void;
+  onUserChange: (user: AuthUser) => void;
+  onLogout: () => void;
+}) {
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [username, setUsername] = useState(user.username);
+  const [email, setEmail] = useState(user.email);
+  const [password, setPassword] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [showPasswordNote, setShowPasswordNote] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const data = await postJson<{
+        user: AuthUser;
+        pendingEmail?: string | null;
+        devCode?: string;
+      }>("/api/profile", { username, email, password }, "PATCH");
+      onUserChange(data.user);
+      setPassword("");
+      if (data.pendingEmail) {
+        setPendingEmail(data.pendingEmail);
+        setMessage(
+          data.devCode
+            ? `Email confirmation code: ${data.devCode}`
+            : "Check your new email for the confirmation code.",
+        );
+      } else {
+        setMessage("Profile updated.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyEmail() {
+    setBusy(true);
+    setError("");
+    try {
+      const data = await postJson<{ user: AuthUser }>(
+        "/api/profile/verify-email",
+        { code: emailCode },
+      );
+      onUserChange(data.user);
+      setEmail(data.user.email);
+      setPendingEmail("");
+      setEmailCode("");
+      setMessage("Email updated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not verify email.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const response = await fetch("/api/profile/avatar", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json()) as { user?: AuthUser; error?: string };
+      if (!response.ok || !data.user) throw new Error(data.error ?? "Avatar upload failed.");
+      onUserChange(data.user);
+      setMessage("Profile image updated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Avatar upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#160b22]/55 p-0 backdrop-blur-sm sm:items-center sm:p-5">
+      <section className="max-h-[92dvh] w-full max-w-[430px] overflow-y-auto rounded-t-[2rem] bg-white p-5 text-[#20172f] shadow-2xl sm:rounded-[2rem]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-purple-500">
+              Profile
+            </p>
+            <h2 className="mt-1 text-3xl font-black tracking-tight">Account</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-50 text-2xl text-purple-900"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="mt-6 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.click()}
+            className="h-20 w-20 overflow-hidden rounded-3xl bg-gradient-to-br from-purple-600 to-fuchsia-500 text-xl font-black text-white shadow-lg"
+          >
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              user.username.slice(0, 2).toUpperCase()
+            )}
+          </button>
+          <div>
+            <p className="font-black">{user.username}</p>
+            <p className="text-sm text-[#7d6a8f]">{user.email}</p>
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              className="mt-2 text-sm font-black text-purple-700"
+            >
+              Change photo
+            </button>
+          </div>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={uploadAvatar}
+          />
+        </div>
+
+        <form onSubmit={saveProfile} className="mt-6 space-y-4">
+          <label className="block text-sm font-bold">
+            Username
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              className="mt-2 w-full rounded-2xl border border-purple-100 px-4 py-3 outline-none ring-purple-300 focus:ring-2"
+            />
+            <span className="mt-1 block text-xs text-[#8c7a9c]">
+              {cooldownText(user.usernameUpdatedAt)}
+            </span>
+          </label>
+          <label className="block text-sm font-bold">
+            Email
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              type="email"
+              className="mt-2 w-full rounded-2xl border border-purple-100 px-4 py-3 outline-none ring-purple-300 focus:ring-2"
+            />
+          </label>
+          <label className="block text-sm font-bold">
+            Password
+            <div className="mt-2 flex gap-2">
+              <input
+                value={showPasswordNote ? "Stored securely; cannot be revealed" : "••••••••••••"}
+                readOnly
+                className="min-w-0 flex-1 rounded-2xl border border-purple-100 px-4 py-3 text-sm outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPasswordNote((value) => !value)}
+                className="rounded-2xl bg-purple-50 px-4 text-sm font-black text-purple-800"
+              >
+                {showPasswordNote ? "Hide" : "Unhide"}
+              </button>
+            </div>
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              placeholder="New password"
+              className="mt-2 w-full rounded-2xl border border-purple-100 px-4 py-3 outline-none ring-purple-300 focus:ring-2"
+            />
+            <span className="mt-1 block text-xs text-[#8c7a9c]">
+              {cooldownText(user.passwordUpdatedAt)}
+            </span>
+          </label>
+
+          {pendingEmail && (
+            <div className="border-l-2 border-purple-400 bg-purple-50 px-3 py-3">
+              <p className="text-xs font-bold text-purple-900">
+                Confirm {pendingEmail} before the email change is saved.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={emailCode}
+                  onChange={(event) => setEmailCode(event.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  className="min-w-0 flex-1 rounded-xl border border-purple-100 px-3 py-2"
+                />
+                <button
+                  type="button"
+                  onClick={verifyEmail}
+                  disabled={busy}
+                  className="rounded-xl bg-purple-700 px-3 py-2 text-xs font-black text-white"
+                >
+                  Verify
+                </button>
+              </div>
+            </div>
+          )}
+
+          {message && <p className="text-sm font-bold text-emerald-700">{message}</p>}
+          {error && <p className="text-sm font-bold text-red-600">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-500 px-5 py-4 text-sm font-black text-white shadow-lg shadow-purple-300/40 disabled:opacity-50"
+          >
+            {busy ? "Saving..." : "Save profile"}
+          </button>
+        </form>
+
+        <button
+          type="button"
+          onClick={onLogout}
+          className="mt-3 w-full rounded-2xl border border-purple-200 px-5 py-4 text-sm font-black text-purple-800"
+        >
+          Log out
+        </button>
+      </section>
+    </div>
+  );
+}
+
 export default function Home() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const [tab, setTab] = useState<TabId>("save");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -65,6 +564,22 @@ export default function Home() {
   const [albumDeleteMode, setAlbumDeleteMode] = useState(false);
   const [selectedForDelete, setSelectedForDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+        const data = (await response.json()) as { user: AuthUser | null };
+        if (active) setAuthUser(data.user);
+      } finally {
+        if (active) setAuthLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadAlbum = useCallback(async () => {
     setAlbumError("");
@@ -111,7 +626,7 @@ export default function Home() {
     setCameraRevealPhase("flash");
   }, []);
 
-  const overlayOpen = Boolean(lightboxUrl) || cameraRevealOpen;
+  const overlayOpen = Boolean(lightboxUrl) || cameraRevealOpen || profileOpen;
 
   useEffect(() => {
     if (!overlayOpen) {
@@ -124,6 +639,7 @@ export default function Home() {
       if (event.key === "Escape") {
         if (lightboxUrl) setLightboxUrl(null);
         else if (cameraRevealOpen) closeCameraRevealKeepFile();
+        else if (profileOpen) setProfileOpen(false);
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -135,6 +651,7 @@ export default function Home() {
     overlayOpen,
     lightboxUrl,
     cameraRevealOpen,
+    profileOpen,
     closeCameraRevealKeepFile,
   ]);
 
@@ -391,6 +908,28 @@ export default function Home() {
   const deleteSelectedCount = selectedForDelete.length;
   const showAlbumFab = tab === "album" && photos.length > 0;
 
+  async function logout() {
+    await postJson("/api/auth/logout");
+    setAuthUser(null);
+    setProfileOpen(false);
+    setPhotos([]);
+    setTab("save");
+  }
+
+  if (authLoading) {
+    return (
+      <main className="mx-auto flex min-h-[100dvh] w-full max-w-[430px] items-center justify-center bg-white px-5 text-[#20172f] shadow-2xl shadow-purple-950/10 sm:my-6 sm:min-h-[880px] sm:rounded-[2rem]">
+        <p className="text-sm font-black uppercase tracking-[0.24em] text-purple-500">
+          Loading FitCheck
+        </p>
+      </main>
+    );
+  }
+
+  if (!authUser) {
+    return <AuthScreen onAuthed={setAuthUser} />;
+  }
+
   return (
     <main
       className={`mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-[radial-gradient(circle_at_top_left,#f3e8ff_0,#fff_34%,#fff_100%)] px-5 pb-8 pt-5 text-[#20172f] shadow-2xl shadow-purple-950/10 sm:my-6 sm:min-h-[880px] sm:rounded-[2rem] ${showAlbumFab ? "pb-28" : ""}`}
@@ -404,9 +943,18 @@ export default function Home() {
             FitCheck
           </h1>
         </div>
-        <div className="fit-soft-float flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600 to-fuchsia-500 text-lg font-black text-white shadow-lg shadow-purple-400/30">
-          FC
-        </div>
+        <button
+          type="button"
+          onClick={() => setProfileOpen(true)}
+          className="fit-soft-float flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 to-fuchsia-500 text-lg font-black text-white shadow-lg shadow-purple-400/30"
+          aria-label="Open profile"
+        >
+          {authUser.avatarUrl ? (
+            <img src={authUser.avatarUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span aria-hidden>{authUser.username.slice(0, 2).toUpperCase()}</span>
+          )}
+        </button>
       </header>
       <p className="mt-4 max-w-[20rem] text-[15px] leading-6 text-[#6f5d82]">
         Take the fit pic, let the AI judge the details, then keep the looks that
@@ -974,6 +1522,15 @@ export default function Home() {
               )}
           </div>
         </div>
+      )}
+
+      {profileOpen && (
+        <ProfileModal
+          user={authUser}
+          onClose={() => setProfileOpen(false)}
+          onUserChange={setAuthUser}
+          onLogout={() => void logout()}
+        />
       )}
     </main>
   );

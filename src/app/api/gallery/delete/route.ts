@@ -1,9 +1,15 @@
 import { del } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
-import { FITCHECK_BLOB_PREFIX } from "@/lib/fitcheck-blob";
+import { getCurrentUser } from "@/lib/auth-store";
+import { userAlbumPrefix } from "@/lib/fitcheck-blob";
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in before deleting photos." }, { status: 401 });
+  }
+
   if (!process.env.BLOB_READ_WRITE_TOKEN?.trim()) {
     return NextResponse.json(
       { error: "Storage is not configured." },
@@ -27,6 +33,7 @@ export async function POST(request: Request) {
   }
 
   const pathnames: string[] = [];
+  const prefix = userAlbumPrefix(user.id);
   for (const item of raw) {
     if (typeof item !== "string" || item.trim() === "") {
       return NextResponse.json(
@@ -34,7 +41,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (!item.startsWith(FITCHECK_BLOB_PREFIX)) {
+    if (!item.startsWith(prefix)) {
       return NextResponse.json(
         { error: "Invalid pathname." },
         { status: 400 },

@@ -1,7 +1,8 @@
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
-import { FITCHECK_BLOB_PREFIX } from "@/lib/fitcheck-blob";
+import { getCurrentUser } from "@/lib/auth-store";
+import { userAlbumPrefix } from "@/lib/fitcheck-blob";
 
 const IMAGE_EXTENSIONS = new Set([
   "jpg",
@@ -54,6 +55,11 @@ function safeUploadExtension(ext: string): string {
 }
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in before saving photos." }, { status: 401 });
+  }
+
   if (!process.env.BLOB_READ_WRITE_TOKEN?.trim()) {
     return NextResponse.json(
       {
@@ -101,7 +107,7 @@ export async function POST(request: Request) {
     }
 
     const uploadExt = safeUploadExtension(ext);
-    const storageName = `${FITCHECK_BLOB_PREFIX}fit-${Date.now()}.${uploadExt}`;
+    const storageName = `${userAlbumPrefix(user.id)}fit-${Date.now()}.${uploadExt}`;
     const contentType = contentTypeForUpload(mime, ext);
 
     const blob = await put(storageName, raw, {

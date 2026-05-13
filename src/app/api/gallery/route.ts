@@ -1,9 +1,15 @@
 import { list } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
-import { FITCHECK_BLOB_PREFIX } from "@/lib/fitcheck-blob";
+import { getCurrentUser } from "@/lib/auth-store";
+import { userAlbumPrefix } from "@/lib/fitcheck-blob";
 
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in to view your album.", photos: [] }, { status: 401 });
+  }
+
   if (!process.env.BLOB_READ_WRITE_TOKEN?.trim()) {
     return NextResponse.json(
       {
@@ -27,7 +33,7 @@ export async function GET() {
 
     do {
       const result = await list({
-        prefix: FITCHECK_BLOB_PREFIX,
+        prefix: userAlbumPrefix(user.id),
         limit: 500,
         cursor,
       });
