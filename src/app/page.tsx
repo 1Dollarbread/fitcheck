@@ -38,7 +38,6 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 export default function Home() {
-  const libraryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<TabId>("save");
@@ -92,14 +91,19 @@ export default function Home() {
 
   useEffect(() => {
     if (tab !== "album") return;
-    void loadAlbum();
+    const timer = window.setTimeout(() => {
+      void loadAlbum();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [tab, loadAlbum]);
 
   useEffect(() => {
-    if (tab !== "save") {
+    if (tab === "save") return;
+    const timer = window.setTimeout(() => {
       setCameraRevealOpen(false);
       setCameraRevealPhase("flash");
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [tab]);
 
   const closeCameraRevealKeepFile = useCallback(() => {
@@ -182,29 +186,22 @@ export default function Home() {
 
   useEffect(() => {
     if (!selectedFile) {
-      setPreviewUrl("");
-      return;
+      const timer = window.setTimeout(() => {
+        setPreviewUrl("");
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
 
     const objectUrl = URL.createObjectURL(selectedFile);
-    setPreviewUrl(objectUrl);
+    const timer = window.setTimeout(() => {
+      setPreviewUrl(objectUrl);
+    }, 0);
 
     return () => {
+      window.clearTimeout(timer);
       URL.revokeObjectURL(objectUrl);
     };
   }, [selectedFile]);
-
-  function handleLibraryFileSelected(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    setCameraRevealOpen(false);
-    setCameraRevealPhase("flash");
-    setCameraFlowActive(false);
-    setFitAnalysis(null);
-    setFitAnalysisError(null);
-    setSelectedFile(file);
-    setErrorMessage("");
-    setSaveSuccess(false);
-  }
 
   function handleCameraFileSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
@@ -223,13 +220,6 @@ export default function Home() {
     }
   }
 
-  function openLibraryPicker() {
-    const input = libraryInputRef.current;
-    if (!input) return;
-    input.value = "";
-    input.click();
-  }
-
   function openCameraPicker() {
     const input = cameraInputRef.current;
     if (!input) return;
@@ -243,7 +233,6 @@ export default function Home() {
     setFitAnalysis(null);
     setFitAnalysisError(null);
     setSelectedFile(null);
-    if (libraryInputRef.current) libraryInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";
     window.setTimeout(() => openCameraPicker(), 80);
   }
@@ -254,7 +243,6 @@ export default function Home() {
     setFitAnalysis(null);
     setFitAnalysisError(null);
     setSelectedFile(null);
-    if (libraryInputRef.current) libraryInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";
     setTab("save");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -271,7 +259,7 @@ export default function Home() {
     if (cameraFlowActive) {
       if (!fitAnalysis) {
         setErrorMessage(
-          "Wait for the outfit scan to finish before saving, or use Add a file instead.",
+          "Wait for the outfit scan to finish before saving.",
         );
         return false;
       }
@@ -304,7 +292,6 @@ export default function Home() {
       setCameraFlowActive(false);
       setFitAnalysis(null);
       setFitAnalysisError(null);
-      if (libraryInputRef.current) libraryInputRef.current.value = "";
       if (cameraInputRef.current) cameraInputRef.current.value = "";
       setSaveSuccess(true);
       setCameraRevealOpen(false);
@@ -323,13 +310,13 @@ export default function Home() {
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedFile) {
-      setErrorMessage("Choose a photo from your library, files, or camera first.");
+      setErrorMessage("Take or choose a photo first.");
       return;
     }
     if (cameraFlowActive) {
       if (!fitAnalysis) {
         setErrorMessage(
-          "Finish the camera outfit scan first, or use Add a file to upload without the camera flow.",
+          "Finish the outfit scan before saving this photo.",
         );
         return;
       }
@@ -406,15 +393,28 @@ export default function Home() {
 
   return (
     <main
-      className={`mx-auto flex min-h-screen w-full max-w-4xl flex-col px-6 py-10 ${showAlbumFab ? "pb-28 sm:pb-24" : ""}`}
+      className={`mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-[radial-gradient(circle_at_top_left,#f3e8ff_0,#fff_34%,#fff_100%)] px-5 pb-8 pt-5 text-[#20172f] shadow-2xl shadow-purple-950/10 sm:my-6 sm:min-h-[880px] sm:rounded-[2rem] ${showAlbumFab ? "pb-28" : ""}`}
     >
-      <h1 className="text-3xl font-bold tracking-tight">FitCheck</h1>
-      <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-        Save outfit photos in one place, then browse them in your album.
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-purple-500">
+            AI outfit rating
+          </p>
+          <h1 className="mt-1 text-4xl font-black tracking-tight text-[#27123d]">
+            FitCheck
+          </h1>
+        </div>
+        <div className="fit-soft-float flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600 to-fuchsia-500 text-lg font-black text-white shadow-lg shadow-purple-400/30">
+          FC
+        </div>
+      </header>
+      <p className="mt-4 max-w-[20rem] text-[15px] leading-6 text-[#6f5d82]">
+        Take the fit pic, let the AI judge the details, then keep the looks that
+        deserve a spot in the album.
       </p>
 
       <div
-        className="mt-8 flex rounded-xl border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-800 dark:bg-zinc-900"
+        className="mt-7 grid grid-cols-2 border-b border-purple-100"
         role="tablist"
         aria-label="FitCheck sections"
       >
@@ -423,23 +423,23 @@ export default function Home() {
           role="tab"
           aria-selected={tab === "save"}
           onClick={() => setTab("save")}
-          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
+          className={`relative px-4 py-3 text-sm font-bold transition ${
             tab === "save"
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-50"
-              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              ? "text-purple-700 after:absolute after:inset-x-4 after:bottom-[-1px] after:h-0.5 after:bg-gradient-to-r after:from-purple-600 after:to-fuchsia-500"
+              : "text-[#8c7a9c] hover:text-purple-700"
           }`}
         >
-          Save photos
+          Check fit
         </button>
         <button
           type="button"
           role="tab"
           aria-selected={tab === "album"}
           onClick={() => setTab("album")}
-          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
+          className={`relative px-4 py-3 text-sm font-bold transition ${
             tab === "album"
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-50"
-              : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              ? "text-purple-700 after:absolute after:inset-x-4 after:bottom-[-1px] after:h-0.5 after:bg-gradient-to-r after:from-purple-600 after:to-fuchsia-500"
+              : "text-[#8c7a9c] hover:text-purple-700"
           }`}
         >
           Album
@@ -449,34 +449,12 @@ export default function Home() {
       {tab === "save" && (
         <form
           onSubmit={handleUpload}
-          className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+          className="mt-8 flex flex-1 flex-col"
         >
-          <p className="mb-3 text-sm font-medium">Add your fit photo</p>
-          <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
-            Use{" "}
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">
-              Add a file
-            </span>{" "}
-            for your photo library, the Files app, or Finder / File Explorer. Use{" "}
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">
-              Take a photo
-            </span>{" "}
-            to use the camera right away.
-          </p>
-
-          <input
-            ref={libraryInputRef}
-            type="file"
-            accept="image/*,.heic,.heif"
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden
-            onChange={handleLibraryFileSelected}
-          />
           <input
             ref={cameraInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,.heic,.heif"
             capture="environment"
             className="sr-only"
             tabIndex={-1}
@@ -484,27 +462,36 @@ export default function Home() {
             onChange={handleCameraFileSelected}
           />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <button
-              type="button"
-              onClick={openLibraryPicker}
-              className="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 dark:hover:bg-zinc-700"
-            >
-              Add a file
-            </button>
-            <button
-              type="button"
-              onClick={openCameraPicker}
-              className="rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-            >
-              Take a photo
-            </button>
-          </div>
+          <section className="relative isolate overflow-hidden rounded-[28px] bg-gradient-to-br from-purple-700 via-fuchsia-600 to-[#ff7ac8] p-[1px] shadow-2xl shadow-purple-300/35">
+            <div className="relative min-h-[420px] overflow-hidden rounded-[27px] bg-white">
+              <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(255,255,255,0.92),rgba(250,245,255,0.52)),radial-gradient(circle_at_20%_16%,rgba(216,180,254,0.75),transparent_32%),radial-gradient(circle_at_82%_0%,rgba(244,114,182,0.5),transparent_28%)]" />
+              <div className="relative flex min-h-[420px] flex-col justify-between p-6">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-purple-600">
+                    Camera first
+                  </p>
+                  <h2 className="mt-3 max-w-[14rem] text-4xl font-black leading-[0.96] tracking-tight text-[#261238]">
+                    Show the fit. Get the verdict.
+                  </h2>
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={openCameraPicker}
+                    className="w-full rounded-2xl bg-[#251236] px-5 py-4 text-base font-black text-white shadow-xl shadow-purple-950/20 transition active:scale-[0.98]"
+                  >
+                    Take photo
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
 
           {selectedFile && !cameraRevealOpen && (
-            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="mt-5 text-xs font-medium text-[#7d6a8f]">
               Selected:{" "}
-              <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              <span className="font-bold text-[#2b173f]">
                 {selectedFile.name || "Photo"}
               </span>
               {selectedFile.type ? ` (${selectedFile.type})` : ""}
@@ -513,27 +500,29 @@ export default function Home() {
 
           {previewUrl && !cameraRevealOpen && (
             <div className="mt-4">
-              <p className="mb-2 text-sm font-medium">Preview</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-500">
+                Preview
+              </p>
               <img
                 src={previewUrl}
                 alt="Preview of selected outfit"
-                className="max-h-96 w-auto rounded-xl border border-zinc-200 object-contain dark:border-zinc-700"
+                className="max-h-[430px] w-full rounded-[1.35rem] border border-purple-100 object-cover shadow-lg shadow-purple-100"
               />
             </div>
           )}
 
           {errorMessage && (
-            <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+            <p className="mt-4 text-sm font-semibold text-red-600">
               {errorMessage}
             </p>
           )}
 
           {saveSuccess && (
-            <p className="mt-4 text-sm text-emerald-700 dark:text-emerald-400">
+            <p className="mt-4 text-sm font-semibold text-emerald-700">
               Saved. Open the{" "}
               <button
                 type="button"
-                className="font-semibold underline"
+                className="font-black underline decoration-purple-300 underline-offset-4"
                 onClick={() => setTab("album")}
               >
                 Album
@@ -545,57 +534,59 @@ export default function Home() {
           <button
             type="submit"
             disabled={isUploading || !selectedFile}
-            className="mt-6 rounded-full bg-black px-5 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
+            className="mt-6 rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-500 px-5 py-4 text-sm font-black text-white shadow-lg shadow-purple-300/40 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {isUploading ? "Uploading..." : "Save fit photo"}
+            {isUploading ? "Uploading..." : "Save rated photo"}
           </button>
         </form>
       )}
 
       {tab === "album" && (
         <section
-          className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+          className="mt-8"
           role="tabpanel"
           aria-label="Album"
         >
           {albumDeleteMode && (
-            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+            <p className="mb-4 border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950">
               Tap photos to select them, then use Delete in the corner to remove
               them forever.
             </p>
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Your album</h2>
+            <h2 className="text-2xl font-black tracking-tight text-[#27123d]">
+              Your album
+            </h2>
             <button
               type="button"
               onClick={() => void loadAlbum()}
               disabled={albumLoading}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-purple-200 bg-white/70 px-3 py-2 text-xs font-black text-purple-800 shadow-sm transition hover:bg-white disabled:opacity-50"
             >
               {albumLoading ? "Refreshing…" : "Refresh"}
             </button>
           </div>
 
           {albumError && (
-            <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+            <p className="mt-4 text-sm font-semibold text-red-600">
               {albumError}
             </p>
           )}
 
           {!albumLoading && !albumError && photos.length === 0 && (
-            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-              No photos yet. Use the Save photos tab to add your first fit.
+            <p className="mt-4 text-sm leading-6 text-[#7d6a8f]">
+              No photos yet. Use the Check fit tab to add your first fit.
             </p>
           )}
 
           {albumLoading && photos.length === 0 && !albumError && (
-            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-4 text-sm text-[#7d6a8f]">
               Loading album…
             </p>
           )}
 
-          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-5">
+          <div className="mt-5 grid grid-cols-2 gap-3">
             {photos.map((photo) => {
               const selected = selectedForDelete.includes(photo.pathname);
               return (
@@ -603,10 +594,10 @@ export default function Home() {
                   key={photo.pathname}
                   type="button"
                   onClick={() => handleAlbumThumbClick(photo)}
-                  className={`group relative aspect-square w-full overflow-hidden rounded-xl border bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black dark:bg-zinc-800 dark:focus-visible:outline-white ${
+                  className={`group relative aspect-[3/4] w-full overflow-hidden rounded-[1.25rem] border bg-purple-50 shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-700 ${
                     selected
-                      ? "border-red-500 ring-2 ring-red-500/80 ring-offset-2 ring-offset-white dark:border-red-500 dark:ring-offset-zinc-900"
-                      : "border-zinc-200 dark:border-zinc-700"
+                      ? "border-red-500 ring-2 ring-red-500/80 ring-offset-2 ring-offset-white"
+                      : "border-purple-100"
                   }`}
                 >
                   <img
@@ -615,7 +606,7 @@ export default function Home() {
                     className="h-full w-full object-cover transition group-hover:opacity-95"
                   />
                   {albumDeleteMode && selected && (
-                    <span className="absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white shadow">
+                    <span className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white shadow">
                       ✓
                     </span>
                   )}
@@ -627,14 +618,14 @@ export default function Home() {
       )}
 
       {showAlbumFab && (
-        <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 sm:bottom-6 sm:right-6">
+        <div className="fixed bottom-5 right-[max(1.25rem,calc((100vw-430px)/2+1.25rem))] z-40 flex flex-col items-end gap-2">
           {albumDeleteMode ? (
             <>
               <button
                 type="button"
                 onClick={exitAlbumDeleteMode}
                 disabled={isDeleting}
-                className="rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 shadow-lg transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="rounded-2xl border border-purple-200 bg-white px-4 py-2.5 text-sm font-black text-purple-900 shadow-lg shadow-purple-200/50 transition hover:bg-purple-50 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -642,7 +633,7 @@ export default function Home() {
                 type="button"
                 onClick={() => void confirmDeleteSelected()}
                 disabled={deleteSelectedCount === 0 || isDeleting}
-                className="rounded-full bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-black text-white shadow-lg transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isDeleting
                   ? "Deleting…"
@@ -655,7 +646,7 @@ export default function Home() {
             <button
               type="button"
               onClick={enterAlbumDeleteMode}
-              className="rounded-full border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900 shadow-lg transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+              className="rounded-2xl bg-[#251236] px-4 py-3 text-sm font-black text-white shadow-xl shadow-purple-300/50 transition active:scale-[0.98]"
             >
               Delete
             </button>
@@ -688,41 +679,53 @@ export default function Home() {
 
       {cameraRevealOpen && previewUrl && (
         <div
-          className="fixed inset-0 z-[70] flex flex-col bg-zinc-950 text-zinc-50"
+          className="fixed inset-0 z-[70] flex flex-col bg-[#160b22] text-white"
           role="dialog"
           aria-modal="true"
           aria-label="Photo captured"
         >
           {cameraRevealPhase === "flash" && (
-            <div
-              className="pointer-events-none absolute inset-0 z-20 bg-white fit-flash-screen"
-              aria-hidden
-            />
+            <>
+              <div
+                className="pointer-events-none absolute inset-0 z-20 bg-white fit-flash-screen"
+                aria-hidden
+              />
+              <div
+                className="fit-shutter-pop pointer-events-none absolute left-1/2 top-1/2 z-30 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white/90 shadow-[0_0_70px_rgba(255,255,255,0.9)]"
+                aria-hidden
+              />
+            </>
           )}
 
           <button
             type="button"
             onClick={closeCameraRevealKeepFile}
-            className="absolute right-4 top-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl font-light text-white backdrop-blur transition hover:bg-white/20"
+            className="absolute right-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-2xl font-light text-white backdrop-blur transition hover:bg-white/20"
             aria-label="Close"
           >
             ×
           </button>
 
-          <div className="relative z-10 flex flex-1 flex-col items-center overflow-y-auto px-5 pb-10 pt-16">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_28%_8%,rgba(168,85,247,0.45),transparent_30%),radial-gradient(circle_at_82%_18%,rgba(236,72,153,0.32),transparent_28%),linear-gradient(180deg,#160b22_0%,#27113d_52%,#0f0718_100%)]" />
+
+          <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-[430px] flex-1 flex-col items-center overflow-y-auto px-5 pb-10 pt-16">
             {cameraRevealPhase === "analyzing" && (
-              <div className="flex min-h-[50vh] flex-col items-center justify-center gap-5 py-12">
-                <div
-                  className="h-11 w-11 animate-spin rounded-full border-2 border-white/15 border-t-white"
-                  aria-hidden
-                />
+              <div className="flex min-h-[70dvh] w-full flex-col items-center justify-center gap-6 py-12">
+                <div className="relative w-full max-w-[260px] overflow-hidden rounded-[1.75rem] border border-white/15 shadow-2xl shadow-purple-950/50">
+                  <img
+                    src={previewUrl}
+                    alt=""
+                    className="aspect-[3/4] w-full object-cover opacity-70"
+                  />
+                  <div className="fit-sweep-line absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-transparent via-white/45 to-transparent" />
+                </div>
                 <div className="text-center">
-                  <p className="text-lg font-semibold tracking-tight">
-                    Scanning your outfit…
+                  <p className="text-2xl font-black tracking-tight">
+                    Scanning the fit...
                   </p>
-                  <p className="mt-2 max-w-xs text-sm text-zinc-500">
-                    Finding shirt, pants, shoes & accessories — ignoring random
-                    objects so they do not count as clothes.
+                  <p className="mt-2 max-w-xs text-sm leading-6 text-purple-100/70">
+                    Checking colors, layers, shoes, and the little choices that
+                    make or break the look.
                   </p>
                 </div>
               </div>
@@ -730,20 +733,22 @@ export default function Home() {
 
             {cameraRevealPhase === "content" && fitAnalysisError && (
               <div className="flex w-full max-w-sm flex-col items-center text-center">
-                <p className="text-lg font-semibold text-white">Scan hit a snag</p>
-                <p className="mt-2 text-sm text-red-300/90">{fitAnalysisError}</p>
+                <p className="text-2xl font-black text-white">Scan hit a snag</p>
+                <p className="mt-2 text-sm leading-6 text-red-200/90">
+                  {fitAnalysisError}
+                </p>
                 <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
                     onClick={retryAnalysis}
-                    className="flex-1 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200"
+                    className="flex-1 rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#251236] transition hover:bg-purple-50"
                   >
                     Retry scan
                   </button>
                   <button
                     type="button"
                     onClick={closeCameraRevealKeepFile}
-                    className="flex-1 rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
+                    className="flex-1 rounded-2xl border border-white/20 px-5 py-3 text-sm font-bold text-white hover:bg-white/10"
                   >
                     Close
                   </button>
@@ -757,7 +762,7 @@ export default function Home() {
               !fitAnalysis.clothingDetected && (
                 <div className="flex w-full max-w-md flex-col items-center">
                   {fitAnalysis.demoMode && (
-                    <div className="mb-5 w-full rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-center text-xs leading-relaxed text-amber-50">
+                    <div className="mb-5 w-full border-l-2 border-amber-300 bg-amber-300/10 px-4 py-3 text-center text-xs leading-relaxed text-amber-50">
                       <strong className="font-semibold">Demo mode.</strong> No
                       vision API key is set, so results are simulated from your
                       file (not a real camera read). For a free real scan in many
@@ -777,50 +782,50 @@ export default function Home() {
                       .
                     </div>
                   )}
-                  <p className="fit-fade-up text-center text-2xl font-semibold leading-snug tracking-tight text-white sm:text-3xl">
+                  <p className="fit-fade-up text-center text-3xl font-black leading-tight tracking-tight text-white">
                     {fitAnalysis.noClothingMessage ??
                       "The outfit dimension does not exist in this timeline."}
                   </p>
-                  <p className="fit-fade-up fit-fade-up-delay-1 mt-3 text-center text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+                  <p className="fit-fade-up fit-fade-up-delay-1 mt-3 text-center text-xs font-bold uppercase tracking-[0.2em] text-purple-200/70">
                     Official scorecard
                     {fitAnalysis.demoMode ? " · simulated" : ""}
                   </p>
 
-                  <div className="fit-fade-up fit-fade-up-delay-2 mt-8 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-center backdrop-blur-sm">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <div className="fit-score-card fit-scale-in relative mt-8 w-full overflow-hidden rounded-[1.4rem] bg-white px-4 py-5 text-center text-[#27123d] shadow-2xl shadow-purple-950/30">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-purple-500">
                       Overall
                     </p>
-                    <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-white">
+                    <p className="mt-1 font-mono text-5xl font-black tabular-nums">
                       0
-                      <span className="text-xl font-normal text-zinc-500">
+                      <span className="text-xl font-normal text-purple-300">
                         /{fitAnalysis.overallMax}
                       </span>
                     </p>
                   </div>
 
-                  <div className="fit-fade-up fit-fade-up-delay-2 mt-4 max-h-48 w-full space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="fit-fade-up fit-fade-up-delay-2 mt-4 max-h-48 w-full space-y-2 overflow-y-auto border-t border-white/10 pt-4">
                     {fitAnalysis.ruleScores.map((row) => (
                       <div
                         key={row.ruleId}
-                        className="flex items-center justify-between gap-2 text-xs text-zinc-400"
+                        className="flex items-center justify-between gap-2 text-xs text-purple-100/70"
                       >
-                        <span className="truncate text-left text-zinc-300">
+                        <span className="truncate text-left text-white/80">
                           {ruleLabel(row.ruleId)}
                         </span>
-                        <span className="shrink-0 font-mono tabular-nums text-zinc-500">
+                        <span className="shrink-0 font-mono tabular-nums text-purple-200/70">
                           0/{row.maxScore}
                         </span>
                       </div>
                     ))}
                   </div>
 
-                  <p className="fit-fade-up fit-fade-up-delay-3 mt-4 text-center text-xs leading-relaxed text-zinc-500">
+                  <p className="fit-fade-up fit-fade-up-delay-3 mt-4 text-center text-xs leading-relaxed text-purple-100/60">
                     Nothing wearable was detected, so this one will not be saved
-                    to your album. Wardrobe integrity protocol engaged.
+                    to your album.
                   </p>
 
                   <div className="fit-scale-in mt-8 w-full max-w-sm">
-                    <div className="overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/50 ring-1 ring-white/10">
+                    <div className="overflow-hidden rounded-[1.4rem] border border-white/10 shadow-2xl shadow-black/50 ring-1 ring-white/10">
                       <img
                         src={previewUrl}
                         alt="Your photo"
@@ -833,14 +838,14 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={tryAgainNoOutfit}
-                      className="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200"
+                      className="w-full rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#251236] transition hover:bg-purple-50"
                     >
                       Try again
                     </button>
                     <button
                       type="button"
                       onClick={retakeCamera}
-                      className="w-full rounded-full border border-white/20 bg-transparent px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                      className="w-full rounded-2xl border border-white/20 bg-transparent px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10"
                     >
                       Retake photo
                     </button>
@@ -854,7 +859,7 @@ export default function Home() {
               fitAnalysis.clothingDetected && (
                 <div className="flex w-full max-w-md flex-col items-center">
                   {fitAnalysis.demoMode && (
-                    <div className="mb-5 w-full rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-center text-xs leading-relaxed text-amber-50">
+                    <div className="mb-5 w-full border-l-2 border-amber-300 bg-amber-300/10 px-4 py-3 text-center text-xs leading-relaxed text-amber-50">
                       <strong className="font-semibold">Demo mode.</strong> No
                       vision API key is set, so scores are simulated (not from
                       real image AI). Add a free{" "}
@@ -873,10 +878,10 @@ export default function Home() {
                       for real analysis.
                     </div>
                   )}
-                  <p className="fit-fade-up max-w-md text-center text-2xl font-semibold leading-snug tracking-tight text-white sm:text-3xl">
+                  <p className="fit-fade-up max-w-md text-center text-3xl font-black leading-tight tracking-tight text-white">
                     {fitAnalysis.overallComment}
                   </p>
-                  <p className="fit-fade-up fit-fade-up-delay-1 mt-3 text-center text-xs font-medium uppercase tracking-[0.2em] text-emerald-400/90">
+                  <p className="fit-fade-up fit-fade-up-delay-1 mt-3 text-center text-xs font-bold uppercase tracking-[0.2em] text-fuchsia-200">
                     {fitAnalysis.demoMode
                       ? "Demo scan · simulated scores"
                       : "AI fit check · rule-based score"}
@@ -887,43 +892,43 @@ export default function Home() {
                       {fitAnalysis.detectedItems.map((d, i) => (
                         <span
                           key={`${d.label}-${i}`}
-                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-200"
+                          className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-xs text-purple-50 backdrop-blur"
                         >
                           <span className="font-medium text-white">{d.label}</span>
-                          <span className="text-zinc-500"> · </span>
+                          <span className="text-purple-200/60"> · </span>
                           {d.colorDescription}
                         </span>
                       ))}
                     </div>
                   )}
 
-                  <div className="fit-fade-up fit-fade-up-delay-2 mt-8 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-center backdrop-blur-sm">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <div className="fit-score-card fit-scale-in relative mt-8 w-full overflow-hidden rounded-[1.4rem] bg-white px-4 py-5 text-center text-[#27123d] shadow-2xl shadow-purple-950/30">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-purple-500">
                       Overall
                     </p>
-                    <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-white">
+                    <p className="mt-1 font-mono text-6xl font-black tabular-nums">
                       {fitAnalysis.overallScore}
-                      <span className="text-xl font-normal text-zinc-500">
+                      <span className="text-xl font-normal text-purple-300">
                         /{fitAnalysis.overallMax}
                       </span>
                     </p>
                   </div>
 
-                  <div className="fit-fade-up fit-fade-up-delay-2 mt-4 max-h-44 w-full space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="fit-fade-up fit-fade-up-delay-2 mt-5 max-h-52 w-full space-y-3 overflow-y-auto border-t border-white/10 pt-4">
                     {fitAnalysis.ruleScores.map((row) => (
                       <div
                         key={row.ruleId}
-                        className="border-b border-white/5 pb-2 last:border-0 last:pb-0"
+                        className="border-b border-white/5 pb-3 last:border-0 last:pb-0"
                       >
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-xs font-medium text-zinc-300">
+                          <span className="text-xs font-bold text-white/90">
                             {ruleLabel(row.ruleId)}
                           </span>
-                          <span className="shrink-0 font-mono text-xs tabular-nums text-zinc-400">
+                          <span className="shrink-0 font-mono text-xs tabular-nums text-purple-200/80">
                             {row.score}/{row.maxScore}
                           </span>
                         </div>
-                        <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                        <p className="mt-1 text-[11px] leading-relaxed text-purple-100/60">
                           {row.shortFeedback}
                         </p>
                       </div>
@@ -931,12 +936,19 @@ export default function Home() {
                   </div>
 
                   <div className="fit-scale-in mt-8 w-full max-w-sm">
-                    <div className="overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/50 ring-1 ring-white/10">
+                    <div className={`relative overflow-hidden rounded-[1.4rem] border border-white/10 shadow-2xl shadow-black/50 ring-1 ring-white/10 ${isUploading ? "fit-uploading-photo" : ""}`}>
                       <img
                         src={previewUrl}
                         alt="Your outfit"
                         className="aspect-[3/4] w-full object-cover"
                       />
+                      {isUploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-purple-950/45 backdrop-blur-[2px]">
+                          <div className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-purple-800 shadow-xl">
+                            Uploading fit...
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -945,15 +957,15 @@ export default function Home() {
                       type="button"
                       disabled={isUploading}
                       onClick={() => void uploadSelectedFile()}
-                      className="flex-1 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 disabled:opacity-50"
+                      className="flex-1 rounded-2xl bg-white px-5 py-4 text-sm font-black text-[#251236] shadow-xl shadow-purple-950/20 transition hover:bg-purple-50 disabled:opacity-50"
                     >
-                      {isUploading ? "Saving…" : "Save to album"}
+                      {isUploading ? "Using photo..." : "Use photo"}
                     </button>
                     <button
                       type="button"
                       disabled={isUploading}
                       onClick={retakeCamera}
-                      className="flex-1 rounded-full border border-white/20 bg-transparent px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-50"
+                      className="flex-1 rounded-2xl border border-white/20 bg-transparent px-5 py-4 text-sm font-bold text-white transition hover:bg-white/10 disabled:opacity-50"
                     >
                       Retake
                     </button>

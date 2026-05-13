@@ -1,7 +1,7 @@
 # FitCheck
 
-FitCheck is a web app where users can upload or take outfit photos.  
-This first version focuses on image capture/upload and storage for future scoring.
+FitCheck is a mobile-first web app where users take outfit photos, get an AI
+fit score, and save rated photos to an album.
 
 ## Local setup
 
@@ -17,11 +17,16 @@ npm install
 cp .env.example .env.local
 ```
 
-3. Add a Vercel Blob token to `.env.local`:
+3. Add your local environment values to `.env.local`:
 
 ```bash
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_read_write_token
+GROQ_API_KEY=your_groq_api_key
 ```
+
+`BLOB_READ_WRITE_TOKEN` powers uploads, the album, and deletes through Vercel
+Blob. `GROQ_API_KEY` powers the real AI outfit scan. If no Groq or OpenAI key is
+set, FitCheck intentionally falls back to demo scoring so the UI still works.
 
 4. Run the app:
 
@@ -34,7 +39,8 @@ Then open [http://localhost:3000](http://localhost:3000).
 ## Deploy on Vercel
 
 1. Import this project to Vercel.
-2. In project settings, add `BLOB_READ_WRITE_TOKEN` as an environment variable.
+2. In project settings, add `BLOB_READ_WRITE_TOKEN` and `GROQ_API_KEY` as
+   environment variables.
 3. Deploy.
 
 The upload endpoint is `POST /api/uploads` and stores files in Vercel Blob.
